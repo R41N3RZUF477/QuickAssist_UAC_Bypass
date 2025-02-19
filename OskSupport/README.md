@@ -1,0 +1,3 @@
+# OskSupport.dll
+
+This DLL can be used in combination with any UIAccess bypass to elevate to full administrator. It can be used in conjunction with osk.exe (DLL hijacking OskSupport.dll). When this DLL gets loaded in an UIAccess process with high integrity, it will search for any elevated window of the current session and will use its integrity level to get a full access process handle of the process that owns the elevated window by using GetProcessHandleFromHwnd() (available since Windows 10 1809; use SetWindowsHookEx() for previous Windows versions). If no elevated window exists then an elevated scheduled task will be executed to create an elevated window for the current session.
