@@ -3,9 +3,8 @@
 #include <string.h>
 
 #include <Windows.h>
-#include <Wininet.h>
 
-#pragma comment(lib, "Wininet.lib")
+#include "resource.h"
 
 const WCHAR* WEBVIEW_DIR = L"\\EBWebView";
 #ifdef _WIN64
@@ -20,6 +19,48 @@ const WCHAR* FALLBACK_ENVKEY = L"Volatile Environment";
 const WCHAR* FALLBACK_ENVVAR = L"WEBVIEW2_BROWSER_EXECUTABLE_FOLDER";
 const WCHAR* QUICKASSIST_BIN = L"\\QuickAssist.exe";
 const WCHAR* QUICKASSIST_PROTOCOL = L"ms-quick-assist:";
+
+static BOOL AddWebView2VersionInfo(const WCHAR* dll_path)
+{
+    HRSRC hrsrc = NULL;
+    DWORD ressize = 0;
+    HGLOBAL loadres = NULL;
+    LPVOID res = NULL;
+    HANDLE update = NULL;
+
+    hrsrc = FindResourceW(NULL, MAKEINTRESOURCEW(IDR_RCDATA1), RT_RCDATA);
+    if (!hrsrc)
+    {
+        return FALSE;
+    }
+    ressize = SizeofResource(NULL, hrsrc);
+    if (!ressize)
+    {
+        return FALSE;
+    }
+    loadres = LoadResource(NULL, hrsrc);
+    if (!loadres)
+    {
+        return FALSE;
+    }
+    res = LockResource(loadres);
+    update = BeginUpdateResourceW(dll_path, FALSE);
+    if (!update)
+    {
+        return FALSE;
+    }
+    if (!UpdateResourceW(update, RT_VERSION, MAKEINTRESOURCEW(1), 0x1033, res, ressize))
+    {
+        EndUpdateResourceW(update, TRUE);
+        return TRUE;
+    }
+    if (!EndUpdateResourceW(update, FALSE))
+    {
+        EndUpdateResourceW(update, TRUE);
+        return TRUE;
+    }
+    return TRUE;
+}
 
 static BOOL RemoveDLLForWebView(const WCHAR* base_path)
 {
@@ -90,7 +131,7 @@ static BOOL CopyDLLForWebView(const WCHAR* base_path, const WCHAR* dll_path)
         return FALSE;
     }
     lstrcatW(path, WEBVIEW_DLL);
-    if (!CopyFile(dll_path, path, FALSE))
+    if (!CopyFileW(dll_path, path, FALSE))
     {
         path[dir2_len] = L'\0';
         RemoveDirectoryW(path);
@@ -98,6 +139,7 @@ static BOOL CopyDLLForWebView(const WCHAR* base_path, const WCHAR* dll_path)
         RemoveDirectoryW(path);
         return FALSE;
     }
+    AddWebView2VersionInfo(path);
     return TRUE;
 }
 
@@ -134,7 +176,7 @@ static BOOL RelayWebView(const WCHAR* webview_path)
         return FALSE;
     }
 
-    if (!RegCreateKeyExW(HKEY_CURRENT_USER, WEBVIEW_POLICY_KEY, 0, NULL, 0, MAXIMUM_ALLOWED, NULL, &key, NULL))
+    if (!RegCreateKeyExW(HKEY_CURRENT_USER, WEBVIEW_POLICY_KEY, 0, NULL, REG_OPTION_VOLATILE, MAXIMUM_ALLOWED, NULL, &key, NULL))
     {
         if (!RegSetValueExW(key, WEBVIEW_POLICY_VALUE, 0, REG_SZ, (const BYTE*)webview_path, lstrlenW(webview_path) * sizeof(WCHAR) + sizeof(WCHAR)))
         {
@@ -208,11 +250,6 @@ int wmain(int argc, WCHAR** argv)
         return 1;
     }
 
-    wprintf(L"Check if system is connected to the internet (needed for QuickAssist) ...\n");
-    if (!InternetGetConnectedState(&inet_state, 0))
-    {
-        return FALSE;
-    }
     wprintf(L"Get temp path ...\n");
     if (!GetTempPathW(200, tmppath))
     {
@@ -239,11 +276,12 @@ int wmain(int argc, WCHAR** argv)
         return 1;
     }
     wprintf(L"Wait for QuickAssist to exit ...\n");
-    if (WaitForSingleObject(process, 30000) != WAIT_OBJECT_0)
+    if (WaitForSingleObject(process, 15000) != WAIT_OBJECT_0)
     {
         KillQuickAssist(process);
         CloseHandle(process);
         RestoreWebView();
+        Sleep(100);
         RemoveDLLForWebView(tmppath);
         return 1;
     }

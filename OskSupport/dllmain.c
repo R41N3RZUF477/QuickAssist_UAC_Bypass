@@ -290,13 +290,50 @@ static BOOL StartElevatedCmd()
 	return ret;
 }
 
+static BOOL HideMainWindowCallback(HWND hwnd, LPARAM lparam)
+{
+	DWORD pid = 0;
+	HANDLE process = NULL;
+	HANDLE token = NULL;
+	DWORD elevtype = 0;
+	DWORD retlen = 0;
+
+	GetWindowThreadProcessId(hwnd, &pid);
+	if (!pid)
+	{
+		return TRUE;
+	}
+	if (GetCurrentProcessId() != pid)
+	{
+		return TRUE;
+	}
+	if (GetWindow(hwnd, GW_OWNER))
+	{
+		return TRUE;
+	}
+	if (!IsWindowVisible(hwnd))
+	{
+		return TRUE;
+	}
+	ShowWindow(hwnd, SW_HIDE);
+	return TRUE;
+}
+
+static void HideMainWindow()
+{
+	EnumWindows((WNDENUMPROC)HideMainWindowCallback, 0);
+}
+
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
+	UINT exitcode = 0;
+
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:
-		StartElevatedCmd();
-		ExitProcess(0);
+		HideMainWindow();
+		exitcode = !StartElevatedCmd();
+		ExitProcess(exitcode);
         break;
     case DLL_THREAD_ATTACH:
         break;
