@@ -199,15 +199,15 @@ static BOOL RelayWebView(const WCHAR* webview_path)
 
 static HANDLE RunQuickAssist()
 {
-    WCHAR quickassist_path[MAX_PATH] = { 0 };
-    SHELLEXECUTEINFOW sei;
+    //WCHAR quickassist_path[MAX_PATH] = { 0 };
+    SHELLEXECUTEINFOW sei = {0};
 
-    memset(&quickassist_path[0], 0, sizeof(quickassist_path));
-    if (!GetSystemDirectoryW(quickassist_path, MAX_PATH - 14))
-    {
-        return NULL;
-    }
-    lstrcatW(quickassist_path, QUICKASSIST_BIN);
+    //memset(&quickassist_path[0], 0, sizeof(quickassist_path));
+    //if (!GetSystemDirectoryW(quickassist_path, MAX_PATH - 14))
+    //{
+    //    return NULL;
+    //}
+    //lstrcatW(quickassist_path, QUICKASSIST_BIN);
 
     memset(&sei, 0, sizeof(sei));
     sei.cbSize = sizeof(sei);
@@ -216,14 +216,14 @@ static HANDLE RunQuickAssist()
     sei.lpParameters = NULL;
     sei.nShow = SW_MINIMIZE;
 
-    if (GetFileAttributesW(quickassist_path) != INVALID_FILE_ATTRIBUTES)
-    {
-        sei.lpFile = quickassist_path;
-    }
-    else
-    {
+    //if (GetFileAttributesW(quickassist_path) != INVALID_FILE_ATTRIBUTES)
+    //{
+    //    sei.lpFile = quickassist_path;
+    //}
+    //else
+    //{
         sei.lpFile = QUICKASSIST_PROTOCOL;
-    }
+    //}
 
     if (ShellExecuteExW(&sei))
     {
