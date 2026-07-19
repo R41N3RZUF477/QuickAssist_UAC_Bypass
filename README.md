@@ -1,5 +1,7 @@
 # QuickAssist UAC Bypass
 
+*Remark: If you search for a UAC bypass with better compatibility (ex: Windows server OSes), you can use: [TabTip UAC Bypass](https://github.com/R41N3RZUF477/TabTip_UAC_Bypass)*
+
 QuickAssist is an application that was introduced in Windows 10 1809. It is an UIAccess binary that is installed by default and can be abused to bypass UAC. Because QuickAssist uses WebView2 for the login mask it can be tricked by the BrowserExecutableFolder group policy to load WebView2 and therefore an attacker-controlled DLL from an arbitrary location. Loading the DLL in QuickAssist process grants high integrity but no administrator permissions.
 This seems like a "downgrade" to a normal UAC bypasses with auto-elevate at first. Other UIAccess/UIPI bypasses try to take control over elevated windows by sending inputs to them. But this is not necessary. The integrity level allows the use of SetWindowsHookExW() (pre Windows 10 1809 compatible) or GetProcessHandleFromHwnd() to take over elevated processes that have a window. If no elevated window exists in the current session, then one could be created by starting an elevated scheduled task. And because no prompts are ever shown on UIAccess programs this makes these kinds of UAC bypasses even better than regular UAC bypasses. This UAC bypass therefore also serves as a PoC to show that any UIAccess bypass can be considered a full UAC bypass. Any previous UAC bypass that can be "downgraded" to an UIAccess bypass can therefore be upgraded to an always notify compatible UAC bypass.
 
